@@ -4,21 +4,18 @@
       <!-- 左边部分，占页面的70% -->
       <el-col :span="17" class="left-section">
         <el-row :gutter="20">
-          <el-col
-            v-for="(servo, index) in servos"
-            :key="index"
-            :span="4"
-            class="servo-col"
-            :class="{ selected: servo.selected }"
-          >
+          <el-col v-for="(servo, index) in servos" :key="index" :span="5" class="servo-col"
+            :class="{ selected: servo.selected }">
             <div class="grid-content ep-bg-purple-dark">
-              <el-checkbox v-model="servo.selected">选择</el-checkbox>
-              <el-switch
-                v-model="servo.selectedSwitch"
-                class="mb-2"
-                active-text="丝滑"
-                inactive-text="极速"
-              />
+              <el-row>
+                <el-col>
+                  <el-checkbox v-model="servo.board1">板1(0x40)</el-checkbox>
+                </el-col>
+                <el-col>
+                <el-checkbox v-model="servo.board2">板2(0x60)</el-checkbox>
+                </el-col>
+              </el-row>
+              <el-switch v-model="servo.selectedSwitch" class="mb-2" active-text="丝滑" inactive-text="极速" />
               <el-input v-model="servo.channel" disabled>
                 <template #prepend>舵机号：</template>
               </el-input>
@@ -43,9 +40,7 @@
           发送选中指令
         </el-button>
         <el-row>
-          <el-button type="primary" @click="setActionGroup"
-            >编写动作组</el-button
-          >
+          <el-button type="primary" @click="setActionGroup">编写动作组</el-button>
         </el-row>
       </el-col>
     </el-row>
@@ -56,7 +51,7 @@
 import { useRouter } from "vue-router";
 import { reactive, ref } from "vue";
 import axios from "axios";
-const raspi_ip = "192.168.123.209";
+const raspi_ip = "192.168.204.169";
 const router = useRouter();
 
 // 添加动作组
@@ -71,12 +66,50 @@ const servos = reactive(
     channel: index,
     angle: 90,
     response: null as string | null,
-    selected: false,
     selectedSwitch: false,
+    board1:false,
+    board2:false,
   }))
 );
 const delay = ref(0); // 延迟时间
 
+// 发送选中舵机命令
+const sendSelectedServoCommands = async () => {
+  try {
+    const requests = servos
+      .filter((servo) => servo.board1 || servo.board2)
+      .map((servo) => {
+        const mode = servo.selectedSwitch ? "丝滑" : "极速";
+        const board = servo.board1 ? 'board1' : (servo.board2 ? 'board2' : null);
+        if (mode === "极速") {
+          return axios.post(`http://${raspi_ip}:5000/servo`, {
+            action: "set",
+            channel: servo.channel,
+            angle: servo.angle,
+            board: board,
+          });
+        } else if (mode === "丝滑") {
+          return axios.post(`http://${raspi_ip}:5000/servo_smooth`, {
+            channel: servo.channel,
+            angle: servo.angle,
+            delay: delay.value,
+            board: board,
+          });
+        }
+      });
+
+    const responses = await Promise.all(requests);
+    responses.forEach((res, index) => {
+      if (res && res.data) {
+        const selectedServo = servos.filter((servo) => servo.board1 || servo.board2)[index];
+        selectedServo.response =
+          res.data.status === "success" ? "设置成功" : res.data.error;
+      }
+    });
+  } catch (error) {
+    console.error("Error sending servo commands:", error);
+  }
+};
 // 查询所有舵机的当前值
 const batchRequest = async (batchSize: number) => {
   for (let i = 0; i < servos.length; i += batchSize) {
@@ -103,40 +136,6 @@ const checkAllServosValue = () => {
   batchRequest(4); // 每次发送 4 个请求
 };
 
-// 发送选中舵机命令
-const sendSelectedServoCommands = async () => {
-  try {
-    const requests = servos
-      .filter((servo) => servo.selected)
-      .map((servo) => {
-        const mode = servo.selectedSwitch ? "丝滑" : "极速";
-        if (mode === "极速") {
-          return axios.post(`http://${raspi_ip}:5000/servo`, {
-            action: "set",
-            channel: servo.channel,
-            angle: servo.angle,
-          });
-        } else if (mode === "丝滑") {
-          return axios.post(`http://${raspi_ip}:5000/servo_smooth`, {
-            channel: servo.channel,
-            angle: servo.angle,
-            delay: delay.value,
-          });
-        }
-      });
-
-    const responses = await Promise.all(requests);
-    responses.forEach((res, index) => {
-      if (res && res.data) {
-        const selectedServo = servos.filter((servo) => servo.selected)[index];
-        selectedServo.response =
-          res.data.status === "success" ? "设置成功" : res.data.error;
-      }
-    });
-  } catch (error) {
-    console.error("Error sending servo commands:", error);
-  }
-};
 </script>
 
 <script lang="ts">
