@@ -176,6 +176,7 @@
 <script lang="ts" setup>
 import { ref, computed } from "vue";
 import axios from "axios";
+<<<<<<< HEAD
 const raspi_ip = "192.168.123.209";
 const sendSelectedServoData = async () => {
   try {
@@ -196,6 +197,94 @@ const sendSelectedServoData = async () => {
   }
 };
 const message = ref("");
+=======
+const raspi_ip = "192.168.204.169";
+const router = useRouter();
+
+// 添加动作组
+const setActionGroup = () => {
+  // 重定向到动作组页面
+  router.push("/action");
+};
+
+// 创建包含16个舵机状态的数组
+const servos = reactive(
+  Array.from({ length: 16 }, (_, index) => ({
+    channel: index,
+    angle: 90,
+    response: null as string | null,
+    selectedSwitch: false,
+    board1:false,
+    board2:false,
+  }))
+);
+const delay = ref(0); // 延迟时间
+
+// 发送选中舵机命令
+const sendSelectedServoCommands = async () => {
+  try {
+    const requests = servos
+      .filter((servo) => servo.board1 || servo.board2)
+      .map((servo) => {
+        const mode = servo.selectedSwitch ? "丝滑" : "极速";
+        const board = servo.board1 ? 'board1' : (servo.board2 ? 'board2' : null);
+        if (mode === "极速") {
+          return axios.post(`http://${raspi_ip}:5000/servo`, {
+            action: "set",
+            channel: servo.channel,
+            angle: servo.angle,
+            board: board,
+          });
+        } else if (mode === "丝滑") {
+          return axios.post(`http://${raspi_ip}:5000/servo_smooth`, {
+            channel: servo.channel,
+            angle: servo.angle,
+            delay: delay.value,
+            board: board,
+          });
+        }
+      });
+
+    const responses = await Promise.all(requests);
+    responses.forEach((res, index) => {
+      if (res && res.data) {
+        const selectedServo = servos.filter((servo) => servo.board1 || servo.board2)[index];
+        selectedServo.response =
+          res.data.status === "success" ? "设置成功" : res.data.error;
+      }
+    });
+  } catch (error) {
+    console.error("Error sending servo commands:", error);
+  }
+};
+// 查询所有舵机的当前值
+const batchRequest = async (batchSize: number) => {
+  for (let i = 0; i < servos.length; i += batchSize) {
+    const batch = servos.slice(i, i + batchSize);
+    const requests = batch.map((servo) =>
+      axios.post(`http://${raspi_ip}:5000/servo`, {
+        action: "get",
+        channel: servo.channel,
+      })
+    );
+    const responses = await Promise.all(requests);
+    responses.forEach((res, index) => {
+      const current_angle = res.data.current_angle || res.data.error;
+      servos[i + index].response = current_angle
+        ? `舵机角度为：${current_angle}`
+        : res.data.error;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10)); // 延迟 10ms
+  }
+};
+
+// 调用批处理请求函数
+const checkAllServosValue = () => {
+  batchRequest(4); // 每次发送 4 个请求
+};
+
+</script>
+>>>>>>> 93e260322182e15017d84d7c857e990c5d4ee630
 
 const arms = ref([
   {

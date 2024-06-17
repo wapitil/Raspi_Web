@@ -7,7 +7,7 @@
           <el-col
             v-for="(servo, index) in servos"
             :key="index"
-            :span="4"
+            :span="5"
             class="servo-col"
             :class="{ selected: servo.selected }"
           >
